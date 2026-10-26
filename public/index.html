@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>STK Push Bot Dashboard</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --accent: #10b981;
+            --accent-hover: #059669;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border: #334155;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 2rem;
+            display: flex;
+            justify-content: center;
+        }
+        .container {
+            width: 100%;
+            max-width: 600px;
+        }
+        .card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+            margin-bottom: 1.5rem;
+        }
+        h2 {
+            margin-top: 0;
+            color: var(--text-main);
+            font-size: 1.5rem;
+            border-bottom: 2px solid var(--border);
+            padding-bottom: 0.75rem;
+        }
+        .form-group {
+            margin-bottom: 1.25rem;
+        }
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-size: 0.875rem;
+            color: var(--text-muted);
+        }
+        input {
+            width: 100%;
+            padding: 0.75rem;
+            background-color: #0f172a;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-main);
+            font-size: 1rem;
+            box-sizing: border-box;
+        }
+        input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+        button {
+            width: 100%;
+            background-color: var(--accent);
+            color: white;
+            border: none;
+            padding: 0.75rem;
+            font-size: 1rem;
+            font-weight: bold;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        button:hover {
+            background-color: var(--accent-hover);
+        }
+        .status-box {
+            display: flex;
+            justify-content: space-between;
+            background: #0f172a;
+            padding: 1rem;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            font-size: 0.95rem;
+        }
+        .alert {
+            margin-top: 1rem;
+            padding: 0.75rem;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            display: none;
+        }
+        .alert.success { background-color: rgba(16, 185, 129, 0.2); border: 1px solid var(--accent); color: #34d399; }
+        .alert.error { background-color: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; color: #f87171; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="card">
+        <h2>STK Push Queue Bot</h2>
+        <div class="status-box">
+            <div>Queue Length: <span id="queueCount" style="font-weight:bold; color:var(--accent);">0</span></div>
+            <div>Worker Status: <span id="workerStatus" style="font-weight:bold; color:var(--text-muted);">Idle</span></div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Key In Number</h2>
+        <form id="stkForm">
+            <div class="form-group">
+                <label for="phoneNumber">Phone Number (e.g., 254712345678)</label>
+                <input type="text" id="phoneNumber" placeholder="254712345678" required>
+            </div>
+            <div class="form-group">
+                <label for="amount">Amount (KES)</label>
+                <input type="number" id="amount" placeholder="1000" required>
+            </div>
+            <div class="form-group">
+                <label for="reference">Reference (Optional)</label>
+                <input type="text" id="reference" placeholder="INV-10022">
+            </div>
+            <div class="form-group">
+                <label for="description">Description (Optional)</label>
+                <input type="text" id="description" placeholder="Retail Checkout">
+            </div>
+            <button type="submit">Queue STK Push</button>
+        </form>
+        <div id="responseAlert" class="alert"></div>
+    </div>
+</div>
+
+<script>
+    async function fetchStatus() {
+        try {
+            const res = await fetch('/api/v1/status');
+            const data = await res.json();
+            document.getElementById('queueCount').innerText = data.queueLength;
+            document.getElementById('workerStatus').innerText = data.isProcessing ? 'Processing (6m Interval)' : 'Idle';
+            document.getElementById('workerStatus').style.color = data.isProcessing ? '#10b981' : '#94a3b8';
+        } catch (e) {
+            console.error('Failed to fetch status', e);
+        }
+    }
+
+    setInterval(fetchStatus, 3000);
+    fetchStatus();
+
+    document.getElementById('stkForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const alertBox = document.getElementById('responseAlert');
+        
+        const payload = {
+            phoneNumber: document.getElementById('phoneNumber').value,
+            amount: Number(document.getElementById('amount').value),
+            reference: document.getElementById('reference').value,
+            description: document.getElementById('description').value
+        };
+
+        try {
+            const res = await fetch('/api/v1/queue-stk', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+
+            if (res.ok) {
+                alertBox.className = 'alert success';
+                alertBox.innerText = `Success! Queued at position #${data.position}`;
+                alertBox.style.display = 'block';
+                document.getElementById('stkForm').reset();
+                fetchStatus();
+            } else {
+                throw new Error(data.error || 'Failed to queue request');
+            }
+        } catch (err) {
+            alertBox.className = 'alert error';
+            alertBox.innerText = err.message;
+            alertBox.style.display = 'block';
+        }
+    });
+</script>
+</body>
+</html>
