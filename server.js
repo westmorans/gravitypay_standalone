@@ -11,39 +11,60 @@ app.use(express.json());
 // Serve static frontend files from the 'public' folder
 app.use(express.static(path.join(__dirname, 'public')));
 
-// In-memory queue and tracking states
+// In-memory state
 const requestQueue = [];
+const requestHistory = [];
 let isProcessing = false;
 
-// Status endpoint to monitor queue health
+// Status & History endpoint for the frontend dashboard
 app.get('/api/v1/status', (req, res) => {
   res.status(200).json({
     status: 'online',
     queueLength: requestQueue.length,
     isProcessing: isProcessing,
-    currentQueue: requestQueue
+    history: requestHistory.slice(0, 20) // Return last 20 processed items
   });
 });
 
-// Endpoint to key in / add mobile numbers to the STK push queue
+// Endpoint to queue bulk or single STK push requests
 app.post('/api/v1/queue-stk', (req, res) => {
-  const { phoneNumber, amount, reference, description } = req.body;
+  let { phoneNumbers, amount, reference, description } = req.body;
 
-  if (!phoneNumber || !amount) {
-    return res.status(400).json({ error: 'phoneNumber and amount are required.' });
+  if (!phoneNumbers || !amount) {
+    return res.status(400).json({ error: 'phoneNumbers and amount are required.' });
   }
 
-  const task = {
-    id: Math.random().toString(36).substring(2, 9),
-    phoneNumber,
-    amount,
-    reference: reference || `INV-${Math.floor(10000 + Math.random() * 90000)}`,
-    description: description || 'Retail Checkout',
-    queuedAt: new Date().toISOString()
-  };
+  // Normalize phoneNumbers: handle strings (comma/newline separated) or arrays
+  let numbersArray = [];
+  if (Array.isArray(phoneNumbers)) {
+    numbersArray = phoneNumbers;
+  } else if (typeof phoneNumbers === 'string') {
+    numbersArray = phoneNumbers
+      .split(/[\n,]+/)
+      .map(num => num.trim())
+      .filter(num => num.length > 0);
+  }
 
-  requestQueue.push(task);
-  console.log(`[Queue Added] Phone: ${phoneNumber} | Total in queue: ${requestQueue.length}`);
+  if (numbersArray.length === 0) {
+    return res.status(400).json({ error: 'No valid phone numbers provided.' });
+  }
+
+  const addedTasks = [];
+
+  numbersArray.forEach((phoneNumber, index) => {
+    const task = {
+      id: Math.random().toString(36).substring(2, 9),
+      phoneNumber,
+      amount: Number(amount),
+      reference: reference ? `${reference}-${index + 1}` : `INV-${Math.floor(10000 + Math.random() * 90000)}`,
+      description: description || 'Retail Checkout',
+      queuedAt: new Date().toISOString()
+    };
+    requestQueue.push(task);
+    addedTasks.push(task);
+  });
+
+  console.log(`[Bulk Queued] Added ${addedTasks.length} numbers. Total queue length: ${requestQueue.length}`);
 
   // Trigger processor loop if not already running
   if (!isProcessing) {
@@ -51,9 +72,9 @@ app.post('/api/v1/queue-stk', (req, res) => {
   }
 
   return res.status(202).json({
-    message: 'STK push queued successfully.',
-    position: requestQueue.length,
-    task
+    message: `Successfully queued ${addedTasks.length} STK push requests.`,
+    queueLength: requestQueue.length,
+    addedTasks
   });
 });
 
@@ -88,12 +109,28 @@ async function processQueue() {
       }
     );
 
+    const successRecord = {
+      ...currentTask,
+      status: 'SUCCESS',
+      responsePayload: response.data,
+      processedAt: new Date().toISOString()
+    };
+
+    requestHistory.unshift(successRecord);
     console.log(`[Success] STK sent to ${currentTask.phoneNumber}:`, response.data);
   } catch (error) {
-    console.error(`[Error] Failed STK push for ${currentTask.phoneNumber}:`, error.response?.data || error.message);
+    const errorRecord = {
+      ...currentTask,
+      status: 'FAILED',
+      errorDetails: error.response?.data || error.message,
+      processedAt: new Date().toISOString()
+    };
+
+    requestHistory.unshift(errorRecord);
+    console.error(`[Error] Failed STK push for ${currentTask.phoneNumber}:`, errorRecord.errorDetails);
   }
 
-  // Enforce a strict 6-minute delay before processing the next request
+  // Enforce strict 6-minute interval (360,000 ms) before next push
   const SIX_MINUTES = 6 * 60 * 1000;
   console.log(`[Cooling Down] Waiting 6 minutes before processing the next request...`);
   
