@@ -78,7 +78,7 @@ app.post('/api/v1/queue-stk', (req, res) => {
   });
 });
 
-// Background Worker processing items 6 minutes apart (360,000 ms)
+// Background Worker processing items 6 seconds apart (6,000 ms)
 async function processQueue() {
   if (requestQueue.length === 0) {
     isProcessing = false;
@@ -130,11 +130,11 @@ async function processQueue() {
     console.error(`[Error] Failed STK push for ${currentTask.phoneNumber}:`, errorRecord.errorDetails);
   }
 
-  // Enforce strict 6-minute interval (360,000 ms) before next push
-  const SIX_MINUTES = 6 * 60 * 1000;
-  console.log(`[Cooling Down] Waiting 6 minutes before processing the next request...`);
+  // Enforce strict 6-second interval (6,000 ms) before next push
+  const SIX_SECONDS = 6 * 1000;
+  console.log(`[Cooling Down] Waiting 6 seconds before processing the next request...`);
   
-  setTimeout(processQueue, SIX_MINUTES);
+  setTimeout(processQueue, SIX_SECONDS);
 }
 
 const PORT = process.env.PORT || 3000;
