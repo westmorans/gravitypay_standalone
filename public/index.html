@@ -100,7 +100,6 @@
         .alert.success { background-color: rgba(16, 185, 129, 0.2); border: 1px solid var(--accent); color: #34d399; }
         .alert.error { background-color: rgba(239, 68, 68, 0.2); border: 1px solid var(--danger); color: #f87171; }
         
-        /* History Table Styles */
         table {
             width: 100%;
             border-collapse: collapse;
@@ -121,7 +120,6 @@
 <body>
 
 <div class="container">
-    <!-- Status Dashboard -->
     <div class="card">
         <h2>Bot Dashboard Status</h2>
         <div class="status-grid">
@@ -134,7 +132,6 @@
         </div>
     </div>
 
-    <!-- Bulk Queue Form -->
     <div class="card">
         <h2>Queue Bulk STK Push</h2>
         <form id="stkForm">
@@ -154,12 +151,11 @@
                 <label for="description">Description (Optional)</label>
                 <input type="text" id="description" placeholder="Retail Checkout">
             </div>
-            <button type="submit">Queue All Numbers (6m Paced Interval)</button>
+            <button type="submit">Queue All Numbers (6s Paced Interval)</button>
         </form>
         <div id="responseAlert" class="alert"></div>
     </div>
 
-    <!-- Live History & Detailed Responses -->
     <div class="card">
         <h2>Dispatch Activity Log & Response Details</h2>
         <div style="overflow-x: auto;">
@@ -188,10 +184,9 @@
             const data = await res.json();
             
             document.getElementById('queueCount').innerText = data.queueLength;
-            document.getElementById('workerStatus').innerText = data.isProcessing ? 'Processing (6m Interval)' : 'Idle';
+            document.getElementById('workerStatus').innerText = data.isProcessing ? 'Processing (6s Interval)' : 'Idle';
             document.getElementById('workerStatus').style.color = data.isProcessing ? '#10b981' : '#94a3b8';
 
-            // Render History Table
             const tbody = document.getElementById('historyTableBody');
             if (data.history && data.history.length > 0) {
                 tbody.innerHTML = data.history.map(item => `
